@@ -8,7 +8,7 @@ model_path = "RUSpam/spam_deberta_v4"
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForSequenceClassification.from_pretrained(model_path)
 GROUP_ID = 'your_group_id' 
-ACCESS_TOKEN = 'your_access_token'  
+ACCESS_TOKEN = 'your_access_token'
 THRESHOLD_REACTIONS = 3 
 
 def is_spam(message):
@@ -37,7 +37,7 @@ class VkBot:
                 message_id = message["conversation_message_id"]
                 text = message["text"]
 
-                if is_spam(text):
+                if peer_id > 2_000_000_000 and is_spam(text):
                     print(f"Обнаружено спам-сообщение: {text}")
                     self.delete_message(peer_id=peer_id, user_id=user_id, message_id=message_id)
                     
