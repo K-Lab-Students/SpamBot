@@ -8,7 +8,7 @@ model_path = "RUSpam/spam_deberta_v4"
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForSequenceClassification.from_pretrained(model_path)
 GROUP_ID = 'your_group_id' 
-ACCESS_TOKEN = 'your_access_token'  
+ACCESS_TOKEN = 'your_access_token'
 THRESHOLD_REACTIONS = 3 
 
 def is_spam(message):
@@ -30,38 +30,30 @@ class VkBot:
     def run(self):
         print("Бот запущен!")
         for event in self.longpoll.listen():
-            if event.type == VkBotEventType.WALL_POST_NEW:
-                post_id = event.object["id"]
-                user_id = event.object["from_id"]
-                text = event.object["text"]
+            if event.type == VkBotEventType.MESSAGE_NEW:
+                message = event.object['message']
+                user_id = message["from_id"]
+                peer_id = message["peer_id"]
+                message_id = message["conversation_message_id"]
+                text = message["text"]
 
-                if is_spam(text):
+                if peer_id > 2_000_000_000 and is_spam(text):
                     print(f"Обнаружено спам-сообщение: {text}")
-                    self.comment_warning(post_id)
-                    self.message_reactions[post_id] = {"user_id": user_id, "reactions": 0}
+                    self.delete_message(peer_id=peer_id, user_id=user_id, message_id=message_id)
+                    
 
-            self.check_reactions()
+    def delete_message(self, peer_id, user_id, message_id):
+        """Удалить сообщение"""
+        if not self.is_conservation_admin(peer_id=peer_id, user_id=user_id):
+            self.vk.messages.delete(cmids=message_id, peer_id=peer_id)
 
-    def comment_warning(self, post_id):
-        """Оставить комментарий под спам-постом."""
-        self.vk.wall.createComment(owner_id=-self.group_id, post_id=post_id, message="3 лайка (реакции) и я его забаню.")
-        print("Комментарий добавлен!")
-
-    def check_reactions(self):
-        """Проверить количество лайков и забанить при необходимости."""
-        for post_id, data in list(self.message_reactions.items()):
-            likes = self.vk.likes.getList(type="post", owner_id=-self.group_id, item_id=post_id)["count"]
-            print(f"Проверка реакций: Пост {post_id} — {likes} лайков.")
-
-            if likes >= THRESHOLD_REACTIONS:
-                print(f"Пост {post_id} достиг {likes} реакций. Блокирую пользователя {data['user_id']}!")
-                self.ban_user(data["user_id"])
-                del self.message_reactions[post_id]
-
-    def ban_user(self, user_id):
-        """Забанить пользователя."""
-        self.vk.groups.ban(group_id=self.group_id, owner_id=user_id)
-        print(f"Пользователь {user_id} забанен.")
+    def is_conservation_admin(self, peer_id, user_id):
+        """Проверка пользователя на администратора беседы."""
+        members = self.vk.messages.getConversationMembers(peer_id=peer_id)
+        for member in members['items']:
+            if member['member_id'] == user_id:
+                return member['is_admin']
+        return False
 
 # Запуск бота
 if __name__ == "__main__":
