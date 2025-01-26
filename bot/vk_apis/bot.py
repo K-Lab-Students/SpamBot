@@ -35,13 +35,79 @@ TRAKING_MESSAGES_BOT = {} # user_id => list of messages
 def send_message(peer_id, text):
     """Отправка сообщения пользователю"""
     try:
-        message_id = vk.messages.send(peer_id=peer_id, message=text, random_id=random.randint(1, 1e6))
-        logging.info(f"Сообщение отправлено: {text} -> peer_id: {peer_id}")
+        # Генерируем уникальный random_id
+        random_id = random.randint(1, 1e9)
+        
+        # Отправляем сообщение с явным указанием версии API
+        response = vk.messages.send(
+            peer_id=peer_id,
+            message=text,
+            random_id=random_id,
+            v='5.199'
+        )
+        
+        # Обрабатываем разные форматы ответа
+        if isinstance(response, list):
+            message_id = response[0]['message_id']
+        elif isinstance(response, dict):
+            message_id = response.get('message_id', 0)
+        else:
+            message_id = response  # Для числового ответа
+            
+        # Логируем отправку
+        logging.info(f"Сообщение отправлено: {text} -> peer_id: {peer_id} (ID: {message_id})")
+        
+        # Сохраняем ID сообщения
         if peer_id not in TRAKING_MESSAGES_BOT:
             TRAKING_MESSAGES_BOT[peer_id] = []
-        TRAKING_MESSAGES_BOT[peer_id].append(message_id) 
+        TRAKING_MESSAGES_BOT[peer_id].append(message_id)
+        
+        return message_id
+        
     except Exception as e:
-        logging.error(f"Ошибка при отправке сообщения: {e}")
+        logging.error(f"Ошибка при отправке сообщения: {e} -> peer_id: {peer_id}")
+        return None
+
+def delete_message(vk, peer_id, user_id, message_id):
+    """Удалить сообщение, если пользователь не админ."""
+    try:
+        vk.messages.delete(
+            cmids=message_id, 
+            peer_id=peer_id,
+            delete_for_all=1
+        )
+        logging.info(
+            f"Сообщение (ID: {message_id}) удалено из беседы {peer_id} "
+            f"пользователем {user_id}."
+        )
+    except vk_api.exceptions.ApiError as e:
+        logging.error(
+            f"Не удалось удалить сообщение (ID: {message_id}) в беседе {peer_id}: {e}",
+            exc_info=True
+        )
+    else:
+        logging.debug(
+            f"Сообщение (ID: {message_id}) не удалено, так как пользователь {user_id} "
+            f"является администратором."
+        )
+        
+
+def get_bot_user_id_from_env():
+    """Получить ID бота из ID группы в конфигурации"""
+    group_id = int(os.getenv("GROUP_ID"))
+    return -group_id
+
+    
+
+def delete_user_messages(peer_id, user_id):
+    """Удаление сообщений пользователя и бота за последний час в указанном чате."""
+    try:
+       bot_id = get_bot_user_id_from_env()
+       for message in TRAKING_MESSAGES_BOT[peer_id]:
+           delete_message(vk, peer_id, bot_id, message)
+
+    except Exception as e:
+        logging.error(f"Ошибка при удалении сообщений: {e}")
 
 def kick_user(chat_id, user_id):
     """Удаление пользователя из беседы"""
@@ -63,55 +129,9 @@ def is_conversation_admin(vk, peer_id, user_id):
         logging.error(f"Ошибка при проверке администратора: {e}")
     return False
 
-def delete_message(vk, peer_id, user_id, message_id):
-    """Удалить сообщение, если пользователь не админ."""
-    logging.debug(
-        f"Проверка пользователя {user_id} на администратора в беседе {peer_id}: {is_admin}"
-    )
-    try:
-        vk.messages.delete(
-            cmids=message_id, 
-            peer_id=peer_id,
-            delete_for_all=1
-        )
-        logging.info(
-            f"Сообщение (ID: {message_id}) удалено из беседы {peer_id} "
-            f"пользователем {user_id}."
-        )
-    except vk_api.exceptions.ApiError as e:
-        logging.error(
-            f"Не удалось удалить сообщение (ID: {message_id}) в беседе {peer_id}: {e}",
-            exc_info=True
-        )
-    else:
-        logging.debug(
-            f"Сообщение (ID: {message_id}) не удалено, так как пользователь {user_id} "
-            f"является администратором."
-        )
 
-def get_bot_user_id(vk):
-    """Получить ID бота (группы) через токен"""
-    try:
-        # ID группы соответствует ID бота, но с отрицательным знаком
-        group_info = vk.groups.getById()
-        bot_user_id = -int(group_info[0]['id'])  # Отрицательный ID группы
-        logging.info(f"ID бота успешно получен: {bot_user_id}")
-        return bot_user_id
-    except vk_api.exceptions.ApiError as e:
-        logging.error(f"Ошибка при получении ID бота: {e}")
-        return None
 
-    
 
-def delete_user_messages(peer_id, user_id):
-    """Удаление сообщений пользователя и бота за последний час в указанном чате."""
-    try:
-       bot_id = get_bot_user_id(vk)
-       for message in TRAKING_MESSAGES_BOT[peer_id]:
-           delete_message(vk, peer_id, bot_id, message)
-
-    except Exception as e:
-        logging.error(f"Ошибка при удалении сообщений: {e}")
 
 
 def handle_new_member(event):
@@ -159,7 +179,7 @@ def check_user_response(event):
     user_id = event.object.message['from_id']
     peer_id = event.object.message['peer_id']
     text = event.object.message['text']
-
+    message_id = event.object.message['conversation_message_id']
     logging.info(f"Получен ответ от user_id={user_id}: {text}")
 
     if user_id not in CHECKING_MEMBERS:
@@ -167,19 +187,6 @@ def check_user_response(event):
         return
 
     member_info = CHECKING_MEMBERS[user_id]
-    try:
-        text = str(text)
-    except Exception as e:
-        member_info['attempts'] += 1
-        if member_info['attempts'] >= MAX_ATTEMPTS:
-            # Ошибка DRY
-            kick_user(peer_id - 2000000000, user_id)
-            delete_user_messages(peer_id, member_info['attempts'])
-            send_message(peer_id, BAN_MESSAGE)
-            logging.warning(f"Пользователь {user_id} заблокирован после 2 попыток")
-            del CHECKING_MEMBERS[user_id]
-        logging.error(f"Ошибка при преобразовании текста ответа: {e}")
-        return
     correct_answer = member_info['correct_answer']
     normalized_text = text.strip().lower()
     normalized_answer = correct_answer.strip().lower()
@@ -191,6 +198,7 @@ def check_user_response(event):
         logging.info(f"Пользователь {user_id} дал правильный ответ")
         del CHECKING_MEMBERS[user_id]
     else:
+        delete_message(vk, peer_id, user_id, message_id)
         member_info['attempts'] += 1
         if member_info['attempts'] >= MAX_ATTEMPTS:
             kick_user(peer_id - 2000000000, user_id)
