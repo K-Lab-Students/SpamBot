@@ -1,3 +1,5 @@
+
+## legacy
 import logging
 import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
