@@ -5,7 +5,7 @@ import logging
 from dotenv import load_dotenv
 import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
-
+from threading import Thread
 # Настройка логирования
 logging.basicConfig(
     level=logging.DEBUG, 
@@ -19,7 +19,7 @@ GROUP_ID = int(os.getenv('GROUP_ID'))
 RIDDLES = eval(os.getenv('RIDDLES'))  
 GREETING_MESSAGE = os.getenv('GREETING_MESSAGE')
 BAN_MESSAGE = os.getenv('BAN_MESSAGE')
-
+MAX_ATTEMPTS = os.getenv('MAX_ATTEMPTS')
 logging.info("Переменные окружения загружены")
 logging.debug(f"GROUP_ID: {GROUP_ID}")
 logging.debug(f"RIDDLES: {RIDDLES}")
@@ -46,50 +46,107 @@ def kick_user(chat_id, user_id):
         logging.info(f"Пользователь {user_id} удалён из беседы {chat_id}")
     except Exception as e:
         logging.error(f"Ошибка при удалении пользователя {user_id}: {e}")
-def delete_user_messages(peer_id, user_id):
-    """Удаление всех сообщений пользователя в указанном чате"""
+
+
+def is_conversation_admin(vk, peer_id, user_id):
+    """Проверяет, является ли пользователь администратором беседы."""
     try:
-        # Получаем все сообщения пользователя в чате
-        all_messages = []
-        offset = 0
+        response = vk.messages.getConversationMembers(peer_id=peer_id)
+        for member in response.get("items", []):
+            if member.get("member_id") == user_id:
+                return member.get("is_admin", False)
+    except vk_api.exceptions.ApiError as e:
+        logging.error(f"Ошибка при проверке администратора: {e}")
+    return False
+
+def delete_message(vk, peer_id, user_id, message_id):
+    """Удалить сообщение, если пользователь не админ."""
+    is_admin = is_conversation_admin(vk, peer_id, user_id)
+    logging.debug(
+        f"Проверка пользователя {user_id} на администратора в беседе {peer_id}: {is_admin}"
+    )
+    if not is_admin:
+        try:
+            vk.messages.delete(
+                cmids=message_id,  # conversation_message_id
+                peer_id=peer_id,
+                delete_for_all=1
+            )
+            logging.info(
+                f"Сообщение (ID: {message_id}) удалено из беседы {peer_id} "
+                f"пользователем {user_id}."
+            )
+        except vk_api.exceptions.ApiError as e:
+            logging.error(
+                f"Не удалось удалить сообщение (ID: {message_id}) в беседе {peer_id}: {e}",
+                exc_info=True
+            )
+    else:
+        logging.debug(
+            f"Сообщение (ID: {message_id}) не удалено, так как пользователь {user_id} "
+            f"является администратором."
+        )
+
+def get_bot_user_id():
+    try:
+        group_info = vk.groups.getById()
+        if group_info:
+            group_id = group_info[0]['id']
+            bot_user_id = -group_id
+            return bot_user_id
+        else:
+            print("Не удалось получить информацию о группе.")
+            return None
+    except vk_api.exceptions.ApiError as e:
+        print(f"Ошибка при получении информации о группе: {e}")
+        return None
+    
+
+def delete_user_messages(peer_id, user_id):
+    """Удаление сообщений пользователя и бота за последний час в указанном чате."""
+    try:
+        bot_id = get_bot_user_id()
         if peer_id < 2000000000:
-                logging.warning("Удаление сообщений доступно только в беседах")
-                return
-                
+            logging.warning("Удаление сообщений доступно только в беседах")
+            return
+
+        # Проверяем, что бот является администратором беседы
         chat_info = vk.messages.getChat(chat_id=peer_id - 2000000000)
         if not chat_info.get('admin_id'):
             logging.error("Бот не является администратором чата")
             return
+
+        # Получаем timestamp за последний час
+        current_time = int(time.time())
+        one_hour_ago = current_time - 3600
+
+        offset = 0
+        all_messages = []
+
         while True:
-            
             response = vk.messages.getHistory(
                 peer_id=peer_id,
-                user_id=user_id,
                 count=200,
                 offset=offset,
-                rev=0 
+                rev=0  # Сортировка от новых к старым
             )
             messages = response.get('items', [])
             if not messages:
                 break
-                
-            all_messages.extend(messages)
+
+            for msg in messages:
+                if msg['date'] >= one_hour_ago and (msg['from_id'] == user_id or msg['from_id'] == bot_id):
+                    all_messages.append(msg)
+
             offset += len(messages)
-            time.sleep(0.3)  
-        message_ids = [msg['id'] for msg in all_messages if msg['from_id'] == user_id]
-        
-        for i in range(0, len(message_ids), 100):
-            batch = message_ids[i:i+100]
-            vk.messages.delete(
-                message_ids=','.join(map(str, batch)),
-                delete_for_all=1,
-                spam=0
-            )
-            logging.info(f"Удалено {len(batch)} сообщений от {user_id}")
-            time.sleep(0.5)
+            time.sleep(0.3)  # Задержка для предотвращения блокировки API
+
+        for msg in all_messages:
+            delete_message(vk, peer_id, msg['from_id'], msg['conversation_message_id'])
 
     except Exception as e:
         logging.error(f"Ошибка при удалении сообщений: {e}")
+
 
 def handle_new_member(event):
     """Обработка нового участника группы или чата"""
@@ -115,9 +172,10 @@ def handle_new_member(event):
             return
 
         logging.info(f"Обработка нового участника: user_id={user_id}, peer_id={peer_id}")
-
+        # ГОВНО код
         riddle, correct_answer = random.choice(RIDDLES)
         send_message(peer_id, riddle)
+        time.sleep(0.3)
 
         CHECKING_MEMBERS[user_id] = {
             'peer_id': peer_id,
@@ -155,42 +213,59 @@ def check_user_response(event):
         del CHECKING_MEMBERS[user_id]
     else:
         member_info['attempts'] += 1
-        if member_info['attempts'] >= 2:
+        if member_info['attempts'] >= MAX_ATTEMPTS:
             kick_user(peer_id - 2000000000, user_id)
+            delete_user_messages(peer_id, member_info['attempts'])
             send_message(peer_id, BAN_MESSAGE)
             logging.warning(f"Пользователь {user_id} заблокирован после 2 попыток")
             del CHECKING_MEMBERS[user_id]
         else:
-            send_message(peer_id, "Неправильный ответ. Попробуйте снова.")
+            send_message(peer_id, f"Неправильный ответ. Попробуйте снова. Осталось попыток {MAX_ATTEMPTS - member_info['attempts']}")
             member_info['timestamp'] = time.time()
             logging.info(f"Пользователю {user_id} предоставлена ещё одна попытка")
 
+def moderation_task():
+    """Периодическая проверка участников из CHECKING_MEMBERS."""
+    while True:
+        try:
+            current_time = time.time()
+            for user_id in list(CHECKING_MEMBERS.keys()):
+                logging.info(f"Проверка пользователя {user_id}")
+                member_info = CHECKING_MEMBERS[user_id]
+                if current_time - member_info['timestamp'] > 60:
+                    delete_user_messages(member_info['peer_id'], user_id)
+                    kick_user(member_info['peer_id'] - 2000000000, user_id)
+                    send_message(member_info['peer_id'], BAN_MESSAGE)
+                    logging.warning(f"Пользователь {user_id} удалён за истечение времени")
+                    del CHECKING_MEMBERS[user_id]
 
-for event in longpoll.listen():
-    try:
-        logging.debug(f"Получено событие: {event}")
-        if event.type == VkBotEventType.MESSAGE_NEW:
-            message = event.object.get("message", {})
-            action = message.get("action", {})
-            if action.get("type") == "chat_invite_user_by_link" or action.get("type") ==  "chat_invite_user":
-                logging.info(f"Пользователь присоединился через ссылку: {message}")
+        except Exception as e:
+            logging.error(f"Ошибка в процессе модерации: {e}")
+        time.sleep(5)  
+
+def main():
+
+    Thread(target=moderation_task, daemon=True).start()
+
+    for event in longpoll.listen():
+        try:
+            logging.debug(f"Получено событие: {event}")
+
+            if event.type == VkBotEventType.MESSAGE_NEW:
+                message = event.object.get("message", {})
+                action = message.get("action", {})
+                if action.get("type") in ["chat_invite_user_by_link", "chat_invite_user"]:
+                    logging.info(f"Пользователь присоединился через ссылку: {message}")
+                    handle_new_member(event)
+                else:
+                    check_user_response(event)
+
+            elif event.type == VkBotEventType.GROUP_JOIN:
                 handle_new_member(event)
-            else:
-                check_user_response(event)
-        elif event.type == VkBotEventType.GROUP_JOIN:
-            handle_new_member(event)
 
-        current_time = time.time()
-        logging.info(f"Начинается проверка")
+        except Exception as e:
+            logging.error(f"Ошибка в основном цикле: {e}")
 
-        for user_id in list(CHECKING_MEMBERS.keys()):
-            logging.info(f"Мы дошли до проверки пользователя {user_id}")
-            member_info = CHECKING_MEMBERS[user_id]
-            if current_time - member_info['timestamp'] > 60:
-                delete_user_messages(member_info['peer_id'], user_id)
-                kick_user(member_info['peer_id'] - 2000000000, user_id)
-                send_message(member_info['peer_id'], BAN_MESSAGE)
-                logging.warning(f"Пользователь {user_id} удалён за истечение времени")
-                del CHECKING_MEMBERS[user_id]
-    except Exception as e:
-        logging.error(f"Ошибка в основном цикле: {e}")
+
+if __name__ == "__main__":
+    main()
