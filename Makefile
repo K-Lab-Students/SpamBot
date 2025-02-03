@@ -1,35 +1,49 @@
-.PHONY: install setup clean
+VENV = venv
+PYTHON = $(VENV)/bin/python3
+SERVICE_NAME = vk-spambot
 
-install:
-	pip3 install -r requirements.txt
+.PHONY: install venv setup clean configure
 
-setup:
-	@echo "Остановка и удаление старого сервиса..."
-	@-sudo systemctl stop vk-spambot 2>/dev/null || true
-	@-sudo systemctl disable vk-spambot 2>/dev/null || true
-	@-sudo userdel -r spambot 2>/dev/null || true
-	@-sudo groupdel spambot 2>/dev/null || true
-	
-	@echo "Создание пользователя и группы..."
-	sudo groupadd --system spambot || true
-	sudo useradd -r -s /bin/false -g spambot spambot || true
+venv:
+	python3 -m venv $(VENV)
+	@echo "Виртуальное окружение создано"
+
+install: venv
+	$(PYTHON) -m pip install --upgrade pip
+	$(PYTHON) -m pip install -r requirements.txt
+	@echo "Зависимости установлены"
+
+configure:
+	@if [ ! -f "bot/vk_apis/.env" ]; then \
+		echo "Создаем .env файл..."; \
+		mkdir -p bot/vk_apis; \
+		touch bot/vk_apis/.env; \
+		nano bot/vk_apis/.env; \
+	else \
+		echo ".env файл уже существует"; \
+	fi
+
+setup: install configure
+	@echo "Остановка старого сервиса..."
+	@-sudo systemctl stop $(SERVICE_NAME) 2>/dev/null || true
 	
 	@echo "Копирование файлов..."
-	sudo mkdir -p /opt/vk-spambot
-	sudo cp -r . /opt/vk-spambot
-	sudo chown -R spambot:spambot /opt/vk-spambot
+	sudo mkdir -p /opt/$(SERVICE_NAME)
+	sudo cp -r . /opt/$(SERVICE_NAME)
+	sudo chown -R spambot:spambot /opt/$(SERVICE_NAME)
 	
 	@echo "Настройка сервиса..."
-	sudo cp deploy/vk-spambot.service /etc/systemd/system/
-	sudo cp deploy/vk-spambot.conf /etc/default/
+	sudo cp deploy/$(SERVICE_NAME).service /etc/systemd/system/
+	sudo cp deploy/$(SERVICE_NAME).conf /etc/default/
 	sudo systemctl daemon-reload
-	sudo systemctl enable vk-spambot
-	@echo "Сервис установлен. Запустите: sudo systemctl start vk-spambot"
+	sudo systemctl enable $(SERVICE_NAME)
+	@echo "Сервис установлен. Запустите: sudo systemctl start $(SERVICE_NAME)"
 
 clean:
-	@-sudo systemctl stop vk-spambot 2>/dev/null || true
-	sudo rm -rf /opt/vk-spambot
-	sudo rm -f /etc/systemd/system/vk-spambot.service
-	sudo rm -f /etc/default/vk-spambot
+	@-sudo systemctl stop $(SERVICE_NAME) 2>/dev/null || true
+	sudo rm -rf /opt/$(SERVICE_NAME)
+	sudo rm -f /etc/systemd/system/$(SERVICE_NAME).service
+	sudo rm -f /etc/default/$(SERVICE_NAME).conf
 	@-sudo userdel -r spambot 2>/dev/null || true
+	@-rm -rf $(VENV)
 	@echo "Очистка завершена" 
