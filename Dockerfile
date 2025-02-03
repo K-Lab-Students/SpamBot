@@ -5,10 +5,10 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r req.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/
 
-WORKDIR /app/bot/vk_apis
+WORKDIR /app/bot
 
-CMD ["python", "bot.py"]
+CMD ["python", "-m", "bot"]
