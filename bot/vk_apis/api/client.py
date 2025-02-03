@@ -14,7 +14,7 @@ class VkClient:
 
     def send_message(self, peer_id, text):
         try:
-            random_id = random.randint(1, 1e9)
+            random_id = int(random.randint(1, int(1e9)))
             response = self.api.messages.send(
                 peer_id=peer_id,
                 message=text,
@@ -75,4 +75,4 @@ class VkClient:
             return False
 
     def listen(self):
-        return self.longpoll.listen() 
+        return self.longpoll.listen()
