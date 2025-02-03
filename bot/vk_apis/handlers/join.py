@@ -15,7 +15,8 @@ class JoinHandler(BaseHandler):
         if event.type != VkBotEventType.GROUP_JOIN:
             return
         try:
-            user_id = event.object.message['action']['member_id']
+            action = event.object.message['action']
+            user_id = action.get('member_id', event.object.message['from_id'])
             chat_id = event.object.message['peer_id']
             if event.object.message['action']['type'] != 'chat_invite_user':
                 return
