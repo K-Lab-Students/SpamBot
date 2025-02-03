@@ -8,6 +8,11 @@ setup:
 	@-sudo systemctl stop vk-spambot 2>/dev/null || true
 	@-sudo systemctl disable vk-spambot 2>/dev/null || true
 	@-sudo userdel -r spambot 2>/dev/null || true
+	@-sudo groupdel spambot 2>/dev/null || true
+	
+	@echo "Создание пользователя и группы..."
+	sudo groupadd --system spambot || true
+	sudo useradd -r -s /bin/false -g spambot spambot || true
 	
 	@echo "Копирование файлов..."
 	sudo mkdir -p /opt/vk-spambot
@@ -17,7 +22,6 @@ setup:
 	@echo "Настройка сервиса..."
 	sudo cp deploy/vk-spambot.service /etc/systemd/system/
 	sudo cp deploy/vk-spambot.conf /etc/default/
-	sudo useradd -r -s /bin/false spambot
 	sudo systemctl daemon-reload
 	sudo systemctl enable vk-spambot
 	@echo "Сервис установлен. Запустите: sudo systemctl start vk-spambot"
