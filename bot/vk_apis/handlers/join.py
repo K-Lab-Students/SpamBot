@@ -14,10 +14,16 @@ class JoinHandler(BaseHandler):
     def handle(self, event):
         if event.type != VkBotEventType.GROUP_JOIN:
             return
-
-        user_id = event.object.user_id
-        peer_id = event.object.peer_id
-        self.bot.handle_new_member(user_id, peer_id)
+        try:
+            user_id = event.object.message['action']['member_id']
+            chat_id = event.object.message['peer_id']
+            if event.object.message['action']['type'] != 'chat_invite_user':
+                return
+            self.bot.handle_new_member(user_id, chat_id)
+        except KeyError as e:
+            logger.error(f"Ошибка парсинга события: {str(e)}")
+        except Exception as e:
+            logger.error(f"Ошибка обработки входа: {str(e)}")
 
     def _send_riddle(self, peer_id, user_id):
         riddle, answer = random.choice(self.bot.config.riddles)
