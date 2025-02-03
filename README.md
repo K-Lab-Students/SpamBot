@@ -2,6 +2,40 @@
 
 Бот для проверки сообщений на спам в сообществах ВКонтакте.
 
+## Управление сервисом 🛠️
+
+### Установка
+```bash
+# Клонируем репозиторий
+git clone https://github.com/yourusername/vk-spambot.git
+cd vk-spambot
+
+# Установка зависимостей и сервиса
+make install
+sudo make setup
+```
+
+### Основные команды
+```bash
+# Запуск
+sudo systemctl start vk-spambot
+
+# Остановка
+sudo systemctl stop vk-spambot
+
+# Статус
+sudo systemctl status vk-spambot
+
+# Логи
+journalctl -u vk-spambot -f
+```
+
+### Обновление
+```bash
+git pull origin main
+sudo systemctl restart vk-spambot
+```
+
 ## Установка
 
 1. Клонируйте репозиторий
@@ -31,40 +65,3 @@
 ## Лицензия
 
 MIT License
-
-## Production Deployment 🚀
-
-### Server Requirements
-- Ubuntu 22.04 LTS
-- Python 3.9+
-- 512MB RAM minimum
-
-### Installation Steps
-```bash
-# 1. Clone repository
-git clone https://github.com/yourusername/vk-spambot.git
-cd SpamBot
-
-# 2. Install dependencies
-make install
-
-# 3. Setup system service
-sudo make setup
-
-# 4. Deploy to production
-make deploy DEPLOY_USER=user DEPLOY_HOST=your.server.com
-```
-
-### Service Management
-```bash
-# Start/Stop
-sudo systemctl start vk-spambot
-sudo systemctl stop vk-spambot
-
-# View logs
-journalctl -u vk-spambot -f
-
-# Update config
-sudo nano /etc/default/vk-spambot
-sudo systemctl restart vk-spambot
-```
