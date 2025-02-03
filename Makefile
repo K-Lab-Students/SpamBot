@@ -5,7 +5,7 @@ SERVICE_NAME = vk-spambot
 .PHONY: install venv setup clean configure
 
 venv:
-	python3 -m venv $(VENV)
+	python3 -m venv $(VENV) || (echo "Установите python3-venv: sudo apt install python3.12-venv" && exit 1)
 	@echo "Виртуальное окружение создано"
 
 install: venv

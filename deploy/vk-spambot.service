@@ -7,10 +7,10 @@ StartLimitIntervalSec=0
 Type=simple
 User=spambot
 WorkingDirectory=/opt/vk-spambot
-ExecStart=/usr/bin/python3 -m bot
+ExecStart=/opt/vk-spambot/venv/bin/python3 -m bot
 Restart=always
 RestartSec=5
-EnvironmentFile=/etc/default/vk-spambot
+EnvironmentFile=/opt/vk-spambot/bot/vk_apis/.env
 
 NoNewPrivileges=yes
 PrivateTmp=yes
