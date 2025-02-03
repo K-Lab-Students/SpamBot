@@ -43,7 +43,7 @@ MIT License
 ```bash
 # 1. Clone repository
 git clone https://github.com/yourusername/vk-spambot.git
-cd vk-spambot
+cd SpamBot
 
 # 2. Install dependencies
 make install
