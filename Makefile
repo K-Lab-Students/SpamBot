@@ -27,6 +27,10 @@ setup: install configure
 	@echo "Остановка старого сервиса..."
 	@-sudo systemctl stop $(SERVICE_NAME) 2>/dev/null || true
 	
+	@echo "Создание системного пользователя..."
+	@-sudo groupadd --system spambot 2>/dev/null || true
+	@-sudo useradd -r -s /bin/false -g spambot spambot 2>/dev/null || true
+	
 	@echo "Копирование файлов..."
 	sudo mkdir -p /opt/$(SERVICE_NAME)
 	sudo cp -r . /opt/$(SERVICE_NAME)
