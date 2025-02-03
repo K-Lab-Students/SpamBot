@@ -14,6 +14,7 @@
 
 ## Установка ⚙️
 
+### Установка
 ```bash
 git clone https://github.com/K-Lab-Students/SpamBot.git
 cd SpamBot
