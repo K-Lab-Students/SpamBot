@@ -14,7 +14,7 @@ setup:
     sudo useradd -r -s /bin/false spambot
     sudo systemctl daemon-reload
     sudo systemctl enable vk-spambot
-# Очистка
+
 clean:
     sudo systemctl stop vk-spambot
     sudo rm -rf /opt/vk-spambot
