@@ -30,7 +30,10 @@ class MessageHandler(BaseHandler):
 
     def _check_response(self, event):
         message = event.object.message
-        user_id = message['from_id']
+        try:
+            user_id = message['action']['member_id']
+        except:
+            user_id = message['from_id']
         peer_id = message['peer_id']
         text = message['text']
         if user_id not in self.bot.checking_members:
