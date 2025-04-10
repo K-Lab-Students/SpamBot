@@ -24,16 +24,17 @@ class MessageHandler(BaseHandler):
             self._check_response(event)
 
     def _handle_invite(self, event):
-        user_id = event.object.message['action'].get('member_id')
-        peer_id = event.object.message['peer_id']
-        self.bot.handle_new_member(user_id, peer_id)
-
-    def _check_response(self, event):
         message = event.object.message
         try:
             user_id = message['action']['member_id']
         except:
             user_id = message['from_id']
+        peer_id = event.object.message['peer_id']
+        self.bot.handle_new_member(user_id, peer_id)
+
+    def _check_response(self, event):
+        message = event.object.message
+        user_id = message['from_id']
         peer_id = message['peer_id']
         text = message['text']
         if user_id not in self.bot.checking_members:
