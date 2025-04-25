@@ -47,6 +47,7 @@ class MessageHandler(BaseHandler):
             self._handle_wrong_answer(user_id, peer_id, message['conversation_message_id'])
 
     def _handle_correct_answer(self, user_id, peer_id):
+        self.bot.client.delete_user_messages(peer_id)
         self.bot.client.send_message(peer_id, self.bot.config.greeting_message)
         del self.bot.checking_members[user_id]
         logger.info(f"User {user_id} passed verification")
@@ -68,6 +69,7 @@ class MessageHandler(BaseHandler):
     def _ban_user(self, user_id, peer_id):
         chat_id = peer_id - 2000000000
         self.bot.client.kick_user(chat_id, user_id)
+        self.bot.client.delete_user_messages(peer_id)
         self.bot.client.send_message(peer_id, self.bot.config.ban_message)
         del self.bot.checking_members[user_id]
         logger.warning(f"Banned user {user_id} in chat {chat_id}")

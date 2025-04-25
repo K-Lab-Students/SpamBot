@@ -72,6 +72,7 @@ class VkBot:
     def _ban_user(self, user_id, peer_id):
         chat_id = peer_id - 2000000000
         self.client.kick_user(chat_id, user_id)
+        self.client.delete_user_messages(peer_id)
         self.client.send_message(peer_id, self.config.ban_message)
         logger.warning(f"Banned user {user_id} by timeout")
 
