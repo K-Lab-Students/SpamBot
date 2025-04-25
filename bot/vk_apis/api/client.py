@@ -16,14 +16,14 @@ class VkClient:
         try:
             random_id = int(random.randint(1, int(1e9)))
             response = self.api.messages.send(
-                peer_id=peer_id,
+                peer_ids=[peer_id],
                 message=text,
                 random_id=random_id,
                 v='5.199'
             )
             if peer_id not in self.tracking_messages:
                 self.tracking_messages[peer_id] = []
-            self.tracking_messages[peer_id].append(response)
+            self.tracking_messages[peer_id].append(response[0]["conversation_message_id"])
             logger.info(f"Sent message to {peer_id}: {text}")
             return response
         except Exception as e:
